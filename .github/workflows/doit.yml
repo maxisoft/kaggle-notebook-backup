@@ -135,14 +135,16 @@ jobs:
           echo "DEPLOY_TO_REPOSITORY prepared" >> $GITHUB_STEP_SUMMARY
 
       - name: Push kernels directory to another repository
-        uses: cpina/github-action-push-to-another-repository@v1
+        uses: cpina/github-action-push-to-another-repository@v1.7.2
         if: ${{ env.DEPLOY_TO_REPOSITORY == 'true' && github.actor == github.repository_owner }}
         with:
           source-directory: tmp
           destination-github-username: ${{ env.DESTINATION_REPOSITORY_USERNAME || github.actor }}
+          destination-repository-name: ${{ env.DESTINATION_REPOSITORY_NAME }}
           user-name: ${{ github.actor }}
           user-email: ${{ github.actor }}@users.noreply.github.com
-          destination-repository-name: ${{ env.DESTINATION_REPOSITORY_NAME }}
+          create-target-branch-if-needed: true
+          target-branch: main
         env:
           SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
 
