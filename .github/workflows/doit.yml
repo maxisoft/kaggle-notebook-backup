@@ -126,6 +126,12 @@ jobs:
             fi
           fi
           
+          if [ -z "$DESTINATION_REPOSITORY_NAME" ]; then
+            echo "DESTINATION_REPOSITORY_NAME is not set"
+            echo "- DESTINATION_REPOSITORY_NAME is not set" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+          
           if [ -z "${{ env.DESTINATION_REPOSITORY_USERNAME }}" ]; then
             if [ -z "${{ secrets.DESTINATION_REPOSITORY_USERNAME }}" ]; then
               if [ -z "${{ vars.DESTINATION_REPOSITORY_USERNAME }}" ]; then
@@ -141,14 +147,24 @@ jobs:
             fi
           fi
           
-          if [ -z "$DESTINATION_REPOSITORY_NAME" ]; then
-            echo "DESTINATION_REPOSITORY_NAME is not set"
-            echo "- DESTINATION_REPOSITORY_NAME is not set" >> $GITHUB_STEP_SUMMARY
-            exit 0
+          if [ -z "${{ env.GIT_DESTINATION_REPOSITORY_USERNAME }}" ]; then
+            if [ -z "${{ secrets.GIT_DESTINATION_REPOSITORY_USERNAME }}" ]; then
+              if [ -z "${{ vars.GIT_DESTINATION_REPOSITORY_USERNAME }}" ]; then
+                export GIT_DESTINATION_REPOSITORY_USERNAME="${{ github.actor }}"
+                echo "GIT_DESTINATION_REPOSITORY_USERNAME set from github.actor"
+              else
+                export GIT_DESTINATION_REPOSITORY_USERNAME="${{ vars.GIT_DESTINATION_REPOSITORY_USERNAME }}"
+                echo "GIT_DESTINATION_REPOSITORY_USERNAME set from vars"
+              fi
+            else
+              export GIT_DESTINATION_REPOSITORY_USERNAME="${{ secrets.GIT_DESTINATION_REPOSITORY_USERNAME }}"
+              echo "GIT_DESTINATION_REPOSITORY_USERNAME set from secrets"
+            fi
           fi
           
           echo "DESTINATION_REPOSITORY_NAME=$DESTINATION_REPOSITORY_NAME" >> $GITHUB_ENV
           echo "DESTINATION_REPOSITORY_USERNAME=$DESTINATION_REPOSITORY_USERNAME" >> $GITHUB_ENV
+          echo "GIT_DESTINATION_REPOSITORY_USERNAME=$GIT_DESTINATION_REPOSITORY_USERNAME" >> $GITHUB_ENV
           
           rm -rf tmp || :
           mkdir -p tmp
@@ -159,17 +175,41 @@ jobs:
           echo "DEPLOY_TO_REPOSITORY=true" >> $GITHUB_ENV
           echo "- DEPLOY_TO_REPOSITORY prepared" >> $GITHUB_STEP_SUMMARY
 
+      - name: Determine if the repo is private
+        if: ${{ env.DEPLOY_TO_REPOSITORY == 'true' }}
+        run: |
+          mkdir tmpgit
+          git clone --depth 1 https://github.com/${{ env.DESTINATION_REPOSITORY_USERNAME }}/${{ env.DESTINATION_REPOSITORY_NAME }}.git tmpgit 2>&1
+          EXIT_CODE=$?
+          
+          if [[ $EXIT_CODE -eq 128 ]]; then
+            echo "Repository is private"
+            echo "SAFE_TO_PUSH=true" >> $GITHUB_ENV
+          else
+            if [[ "${KAGGLE_KERNELS_PRIVATE:-}" =~ ^(true|1|y|yes|ok)$ ]]; then
+              echo "Unable to push private kernels into a public repository"
+              echo "SAFE_TO_PUSH=false" >> $GITHUB_ENV
+            else
+              echo "SAFE_TO_PUSH=true" >> $GITHUB_ENV
+            fi
+          fi
+          rm -rf tmpgit
+        env:
+          GIT_CONFIG_SYSTEM: ''
+          GIT_CONFIG_GLOBAL: ''
+          GIT_CONFIG_LOCAL: ''
+
       - name: Push kernels directory to another repository
         uses: cpina/github-action-push-to-another-repository@v1.7.2
-        if: ${{ env.DEPLOY_TO_REPOSITORY == 'true' && github.actor == github.repository_owner }}
+        if: ${{ env.DEPLOY_TO_REPOSITORY == 'true' && env.SAFE_TO_PUSH == 'true' && github.actor == github.repository_owner }}
         with:
           source-directory: tmp
           destination-github-username: ${{ env.DESTINATION_REPOSITORY_USERNAME }}
           destination-repository-name: ${{ env.DESTINATION_REPOSITORY_NAME }}
-          user-name: ${{ vars.GIT_DESTINATION_REPOSITORY_USERNAME || github.actor }}
-          user-email: ${{ vars.GIT_DESTINATION_REPOSITORY_USERNAME || github.actor }}@users.noreply.github.com
-          create-target-branch-if-needed: true
-          target-branch: main
+          user-name: ${{ env.GIT_DESTINATION_REPOSITORY_USERNAME }}
+          user-email: ${{ env.GIT_DESTINATION_REPOSITORY_USERNAME }}@users.noreply.github.com
+          create-target-branch-if-needed: ${{ vars.DEPLOY_TO_REPOSITORY_CREATE_TARGET_BRANCH_IF_NEEDED || true }}
+          target-branch: ${{ vars.DEPLOY_TO_REPOSITORY_TARGET_BRANCH || 'main' }}
         env:
           SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
 
