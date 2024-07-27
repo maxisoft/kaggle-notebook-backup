@@ -88,7 +88,7 @@ jobs:
           7z x kernels.zip -otmp
           echo "- kernels.7z creation" > $GITHUB_STEP_SUMMARY
           pushd tmp
-          7z a -t7z -m0=lzma2 -mx=6 -mhe=on -ms=on -p"${{ secrets.ARCHIVE_PASSWORD }}" kernels.7z *
+          7z a -t7z -m0=lzma2 -mx=6 -mhe=on -ms=on -p"${{ secrets.ARCHIVE_PASSWORD }}" ../kernels.7z *
           popd
           echo "archive_created=true" >> $GITHUB_ENV
           echo "- kernels.7z has been created" > $GITHUB_STEP_SUMMARY
