@@ -1,4 +1,4 @@
-name: do it
+name: pull request lint and test
 
 on:
   pull_request:
