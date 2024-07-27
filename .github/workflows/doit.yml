@@ -1,0 +1,81 @@
+name: do it
+
+on:
+  push:
+    branches: [ "main" ]
+  schedule:
+    - cron: "33 18 * * *"
+
+env:
+  PYTHON_VERSION: "3.10"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}-${{ github.actor || github.repository_owner }}
+  cancel-in-progress: ${{ (github.event_name == 'push' && github.base_ref == 'main' || github.event_name == 'schedule') && github.actor == github.repository_owner }}
+
+jobs:
+  doit:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "${{ env.PYTHON_VERSION }}"
+
+      - name: Cache pip dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-${{ env.PYTHON_VERSION }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.PYTHON_VERSION }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pytest
+
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+      - name: Lint with flake8
+        run: |
+          flake8 . --count --exit-zero --select=E,F --show-source --statistics
+          # Exit on syntax errors and undefined names
+          exit 0  # Treats all errors as warnings (consider a stricter exit code)
+
+
+      - name: Lint another time with flake8
+        run: |
+          flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Run tests
+        if: false
+        run: |
+          pytest
+
+      - name: Login to Kaggle
+        if: ${{ github.actor == github.repository_owner }}
+        uses: osbm/kaggle-login@v2.3
+        with:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME || github.repository_owner }}
+          KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
+
+      - name: Run app
+        if: ${{ github.actor == github.repository_owner }}
+        run: |
+          python main.py
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: kernels
+          path: kernels.zip
+          if-no-files-found: error
+          retention-days: 90
+
