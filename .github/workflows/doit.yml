@@ -4,12 +4,12 @@ on:
   push:
     branches: [ "main" ]
   schedule:
-    - cron: "33 18 * * *"
+    - cron: ${{ vars.CRON || '33 18 * * *'}}
   workflow_dispatch:
 
 env:
-  KAGGLE_KERNELS_PRIVATE: "no"
-  PYTHON_VERSION: "3.11"
+  KAGGLE_KERNELS_PRIVATE: ${{ vars.KAGGLE_KERNELS_PRIVATE || 'no' }}
+  PYTHON_VERSION: ${{ vars.PYTHON_VERSION || '3.11' }}
 
 permissions:
   contents: read
@@ -66,7 +66,7 @@ jobs:
         if: ${{ github.actor == github.repository_owner }}
         uses: osbm/kaggle-login@v2.3
         with:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME || github.repository_owner }}
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME || vars.KAGGLE_USERNAME || github.repository_owner }}
           KAGGLE_KEY: ${{ secrets.KAGGLE_KEY }}
 
       - name: Run app
@@ -77,7 +77,7 @@ jobs:
           echo "- kaggle kernels downloaded" > $GITHUB_STEP_SUMMARY
 
       - name: ReZip kernels
-        if: ${{ github.actor == github.repository_owner }}
+        if: ${{ github.actor == github.repository_owner && (!startsWith('y', (vars.DISABLE_KAGGLE_ARCHIVING || 'no'))) }}
         run: |
           if [ -z "${{ secrets.ARCHIVE_PASSWORD }}" ]; then
             echo "ARCHIVE_PASSWORD secret is not set"
@@ -101,7 +101,7 @@ jobs:
           name: kernels
           path: kernels.7z
           if-no-files-found: error
-          retention-days: 90
+          retention-days: ${{ vars.ARTIFACT_RETENTION_DAYS || 90 }}
 
       - name: Prepare remote git push
         if: ${{ github.actor == github.repository_owner }}
@@ -114,6 +114,12 @@ jobs:
           if [ -z "${{ env.DESTINATION_REPOSITORY_NAME }}" ]; then
             if [ -z "${{ secrets.DESTINATION_REPOSITORY_NAME }}" ]; then
               echo "DESTINATION_REPOSITORY_NAME secret is not set"
+              if [ -z "${{ vars.DESTINATION_REPOSITORY_USERNAME }}" ]; then
+                echo "DESTINATION_REPOSITORY_USERNAME vars is not set"
+              else
+                export DESTINATION_REPOSITORY_NAME="${{ vars.DESTINATION_REPOSITORY_USERNAME }}"
+                echo "DESTINATION_REPOSITORY_NAME set from vars"
+              fi
             else
               export DESTINATION_REPOSITORY_NAME="${{ secrets.DESTINATION_REPOSITORY_NAME }}"
               echo "DESTINATION_REPOSITORY_NAME set from secrets"
@@ -122,8 +128,13 @@ jobs:
           
           if [ -z "${{ env.DESTINATION_REPOSITORY_USERNAME }}" ]; then
             if [ -z "${{ secrets.DESTINATION_REPOSITORY_USERNAME }}" ]; then
-              export DESTINATION_REPOSITORY_USERNAME="${{ github.actor }}"
-              echo "DESTINATION_REPOSITORY_USERNAME set from github.actor"
+              if [ -z "${{ vars.DESTINATION_REPOSITORY_USERNAME }}" ]; then
+                export DESTINATION_REPOSITORY_USERNAME="${{ github.actor }}"
+                echo "DESTINATION_REPOSITORY_USERNAME set from github.actor"
+              else
+                export DESTINATION_REPOSITORY_USERNAME="${{ vars.DESTINATION_REPOSITORY_USERNAME }}"
+                echo "DESTINATION_REPOSITORY_USERNAME set from vars"
+              fi
             else
               export DESTINATION_REPOSITORY_USERNAME="${{ secrets.DESTINATION_REPOSITORY_USERNAME }}"
               echo "DESTINATION_REPOSITORY_USERNAME set from secrets"
@@ -155,8 +166,8 @@ jobs:
           source-directory: tmp
           destination-github-username: ${{ env.DESTINATION_REPOSITORY_USERNAME }}
           destination-repository-name: ${{ env.DESTINATION_REPOSITORY_NAME }}
-          user-name: ${{ github.actor }}
-          user-email: ${{ github.actor }}@users.noreply.github.com
+          user-name: ${{ vars.GIT_DESTINATION_REPOSITORY_USERNAME || github.actor }}
+          user-email: ${{ vars.GIT_DESTINATION_REPOSITORY_USERNAME || github.actor }}@users.noreply.github.com
           create-target-branch-if-needed: true
           target-branch: main
         env:
