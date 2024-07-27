@@ -73,11 +73,28 @@ jobs:
         run: |
           python main.py
 
+
+      - uses: milliewalky/setup-7-zip@v1
+
+      - name: ReZip kernels
+        if: ${{ github.actor == github.repository_owner && secrets.ARCHIVE_PASSWORD }}
+        run: |
+          mkdir -p tmp
+          7z x kernels.zip -otmp
+          7z a -t7z -mx=9 -p"${{ secrets.ARCHIVE_PASSWORD }}" kernels.7z tmp/*
+
+      - name: Cleanup
+        if: ${{ always() }}
+        run: |
+          rm -rf tmp || :
+          rm -rf kernels.zip || :
+          exit 0
+
       - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: kernels
-          path: kernels.zip
+          path: kernels.7z
           if-no-files-found: error
           retention-days: 90
 
