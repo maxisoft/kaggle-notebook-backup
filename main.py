@@ -1,14 +1,12 @@
 import argparse
 import logging
-import pathlib
 import shutil
 from pathlib import Path
-
-from pathvalidate import FileNameValidator
-from sortedcontainers import SortedSet
 from tempfile import TemporaryDirectory
-from kaggle.api.kaggle_api_extended import KaggleApi
+
 import pathvalidate
+from kaggle.api.kaggle_api_extended import KaggleApi
+from sortedcontainers import SortedSet
 
 MAX_PAGE_SIZE = 100
 
@@ -46,13 +44,9 @@ def validate_filename(value):
 
 
 def get_kernels(api, user, page=1, include_private=True, page_size=MAX_PAGE_SIZE):
-    kernels = api.kernels_list(
-        page=page,
-        user=user or api.get_config_value(api.CONFIG_NAME_USER) or api.api_client.configuration.username,
-        sort_by="dateRun",
-        page_size=page_size,
-        mine=True
-    )
+    kernels = api.kernels_list(page=page,
+                               user=user or api.get_config_value(api.CONFIG_NAME_USER),
+                               sort_by="dateRun", page_size=page_size, mine=True)
     if not include_private:
         return [k for k in kernels if not getattr(k, 'isPrivate', getattr(k, 'isPrivateNullable'))]
     else:
@@ -70,26 +64,16 @@ def kernel_to_path(kernel):
 def main(include_private=True, max_page_size=MAX_PAGE_SIZE, user=None, output_name="kernels.zip",
          tmp_dir_prefix="kaggle_", tmp_dir=None):
     parser = argparse.ArgumentParser(description="Download All Kaggle Kernels")
-    parser.add_argument(
-        "-o", "--output", type=validate_filename, default=output_name,
-        help="Name of the output zip file (default: kernels.zip)"
-    )
-    parser.add_argument(
-        "-p", "--include-private", action="store_true", default=include_private,
-        help="Include private kernels in the download (default: True)"
-    )
-    parser.add_argument(
-        "-u", "--user", type=str, default=user,
-        help="Username of the Kaggle user to search kernels for (default: current user)"
-    )
-    parser.add_argument(
-        "-s", "--max-page-size", type=validate_positive_int, default=max_page_size,
-        help="Maximum number of kernels to download per page (default: 100)"
-    )
-    parser.add_argument(
-        "-t", "--tmp-dir", type=str, default=tmp_dir,
-        help="Path to the temporary directory (default: None)"
-    )
+    parser.add_argument("-o", "--output", type=validate_filename, default=output_name,
+                        help="Name of the output zip file (default: kernels.zip)")
+    parser.add_argument("-p", "--include-private", action="store_true", default=include_private,
+                        help="Include private kernels in the download (default: True)")
+    parser.add_argument("-u", "--user", type=str, default=user,
+                        help="Username of the Kaggle user to search kernels for (default: current user)")
+    parser.add_argument("-s", "--max-page-size", type=validate_positive_int, default=max_page_size,
+                        help="Maximum number of kernels to download per page (default: 100)")
+    parser.add_argument("-t", "--tmp-dir", type=str, default=tmp_dir,
+                        help="Path to the temporary directory (default: None)")
 
     args = parser.parse_args()
 
@@ -128,7 +112,7 @@ def main(include_private=True, max_page_size=MAX_PAGE_SIZE, user=None, output_na
                 path = kernel_to_path(kernel)
                 path.mkdir(parents=True, exist_ok=True)
                 api.kernels_pull(kernel.ref, path=path, metadata=True)
-            except Exception as e:
+            except Exception:
                 logging.warning("Failed to download %r", getattr(kernel, 'ref', getattr(kernel, 'title')),
                                 exc_info=True)
 
