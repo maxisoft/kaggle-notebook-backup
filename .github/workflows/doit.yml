@@ -8,6 +8,7 @@ on:
   workflow_dispatch:
 
 env:
+  KAGGLE_KERNELS_PRIVATE: "no"
   PYTHON_VERSION: "3.11"
 
 permissions:
