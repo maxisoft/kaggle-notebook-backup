@@ -71,7 +71,9 @@ jobs:
       - name: Run app
         if: ${{ github.actor == github.repository_owner }}
         run: |
+          echo "kaggle kernels download process" > $GITHUB_STEP_SUMMARY
           python main.py
+          echo "kaggle kernels downloaded" > $GITHUB_STEP_SUMMARY
 
       - name: ReZip kernels
         if: ${{ github.actor == github.repository_owner }}
@@ -83,9 +85,10 @@ jobs:
           fi
           mkdir -p tmp
           7z x kernels.zip -otmp
+          echo "kernels.7z creation" > $GITHUB_STEP_SUMMARY
           7z a -t7z -mx=9 -p"${{ secrets.ARCHIVE_PASSWORD }}" kernels.7z tmp/*
           echo "archive_created=true" >> $GITHUB_ENV
-          echo "kernels.7z has been created" >> $GITHUB_STEP_SUMMARY
+          echo "kernels.7z has been created" > $GITHUB_STEP_SUMMARY
           rm -rf tmp || :
 
       - name: Upload Archive Artifact
@@ -109,6 +112,7 @@ jobs:
               echo "DESTINATION_REPOSITORY_NAME secret is not set"
             else
               export DESTINATION_REPOSITORY_NAME="${{ secrets.DESTINATION_REPOSITORY_NAME }}"
+              echo "DESTINATION_REPOSITORY_NAME set from secrets"
             fi
           fi
           
@@ -122,20 +126,21 @@ jobs:
           
           rm -rf tmp || :
           mkdir -p tmp
-          echo "Extract archive" >> $GITHUB_STEP_SUMMARY
+          echo "Extract archive" > $GITHUB_STEP_SUMMARY
           
           7z x kernels.zip -otmp
           
           echo "DEPLOY_TO_REPOSITORY=true" >> $GITHUB_ENV
+          echo "DEPLOY_TO_REPOSITORY prepared" >> $GITHUB_STEP_SUMMARY
 
-      - name: Push kernelsdirectory to another repository
+      - name: Push kernels directory to another repository
         uses: cpina/github-action-push-to-another-repository@v1
         if: ${{ env.DEPLOY_TO_REPOSITORY == 'true' && github.actor == github.repository_owner }}
         with:
           source-directory: tmp
           destination-github-username: ${{ env.DESTINATION_REPOSITORY_USERNAME || github.actor }}
-          user-name: ${{ env.DESTINATION_REPOSITORY_USERNAME || github.actor }}
-          user-email: ${{ env.DESTINATION_REPOSITORY_USERNAME || github.actor }}@users.noreply.github.com
+          user-name: ${{ github.actor }}
+          user-email: ${{ github.actor }}@users.noreply.github.com
           destination-repository-name: ${{ env.DESTINATION_REPOSITORY_NAME }}
         env:
           SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
