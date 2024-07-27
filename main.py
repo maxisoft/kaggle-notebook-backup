@@ -109,7 +109,7 @@ def main(include_private=True, max_page_size=MAX_PAGE_SIZE, user=None, output_na
 
         for kernel in retry_later:
             try:
-                path = kernel_to_path(kernel)
+                path = Path(tmpdir, kernel_to_path(kernel))
                 path.mkdir(parents=True, exist_ok=True)
                 api.kernels_pull(kernel.ref, path=path, metadata=True)
             except Exception:
