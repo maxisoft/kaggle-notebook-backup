@@ -2,9 +2,10 @@ name: pull request lint and test
 
 on:
   pull_request:
+  workflow_dispatch:
 
 env:
-  PYTHON_VERSION: "graalpy-24"
+  PYTHON_VERSION: "3.11"
 
 permissions:
   contents: read
@@ -26,7 +27,7 @@ jobs:
           python-version: "${{ env.PYTHON_VERSION }}"
 
       - name: Cache pip dependencies
-        if: ${{ github.actor == github.repository_owner }}
+        if: ${{ !startsWith('graal', env.PYTHON_VERSION) && github.actor == github.repository_owner }}
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
