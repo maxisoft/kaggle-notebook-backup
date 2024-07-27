@@ -87,7 +87,9 @@ jobs:
           mkdir -p tmp
           7z x kernels.zip -otmp
           echo "- kernels.7z creation" > $GITHUB_STEP_SUMMARY
-          7z a -t7z -mx=9 -p"${{ secrets.ARCHIVE_PASSWORD }}" kernels.7z tmp/*
+          pushd tmp
+          7z a -t7z -m0=lzma2 -mx=6 -mhe=on -ms=on -p"${{ secrets.ARCHIVE_PASSWORD }}" kernels.7z *
+          popd
           echo "archive_created=true" >> $GITHUB_ENV
           echo "- kernels.7z has been created" > $GITHUB_STEP_SUMMARY
           rm -rf tmp || :
@@ -101,7 +103,8 @@ jobs:
           if-no-files-found: error
           retention-days: 90
 
-      - if: ${{ github.actor == github.repository_owner }}
+      - name: Prepare remote git push
+        if: ${{ github.actor == github.repository_owner }}
         run: |
           if [ -z "${{ secrets.SSH_DEPLOY_KEY }}" ]; then
             echo "- SSH_DEPLOY_KEY secret is not set" >> $GITHUB_STEP_SUMMARY
