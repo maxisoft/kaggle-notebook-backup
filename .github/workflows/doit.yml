@@ -77,8 +77,12 @@ jobs:
       - uses: milliewalky/setup-7-zip@v1
 
       - name: ReZip kernels
-        if: ${{ github.actor == github.repository_owner && secrets.ARCHIVE_PASSWORD }}
+        if: ${{ github.actor == github.repository_owner }}
         run: |
+          if [ -z "${{ secrets.ARCHIVE_PASSWORD }}" ]; then
+            echo "ARCHIVE_PASSWORD secret is not set"
+            exit 1
+          fi
           mkdir -p tmp
           7z x kernels.zip -otmp
           7z a -t7z -mx=9 -p"${{ secrets.ARCHIVE_PASSWORD }}" kernels.7z tmp/*
