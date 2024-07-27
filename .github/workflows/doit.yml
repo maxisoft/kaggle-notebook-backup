@@ -4,7 +4,7 @@ on:
   push:
     branches: [ "main" ]
   schedule:
-    - cron: ${{ vars.CRON || '33 18 * * *'}}
+    - cron: 33 18 * * *
   workflow_dispatch:
 
 env:
