@@ -30,7 +30,7 @@ jobs:
           python-version: "${{ env.PYTHON_VERSION }}"
 
       - name: Cache pip dependencies
-        if: !startsWith('graal', env.PYTHON_VERSION) && ${{ github.actor == github.repository_owner }}
+        if: ${{ !startsWith('graal', env.PYTHON_VERSION) && github.actor == github.repository_owner }}
         uses: actions/cache@v4
         with:
           path: ~/.cache/pip
