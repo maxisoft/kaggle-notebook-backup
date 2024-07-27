@@ -78,24 +78,73 @@ jobs:
         run: |
           if [ -z "${{ secrets.ARCHIVE_PASSWORD }}" ]; then
             echo "ARCHIVE_PASSWORD secret is not set"
-            exit 1
+            echo "ARCHIVE_PASSWORD secret is not set" >> $GITHUB_STEP_SUMMARY
+            exit 0
           fi
           mkdir -p tmp
           7z x kernels.zip -otmp
           7z a -t7z -mx=9 -p"${{ secrets.ARCHIVE_PASSWORD }}" kernels.7z tmp/*
-
-      - name: Cleanup
-        if: ${{ always() }}
-        run: |
+          echo "archive_created=true" >> $GITHUB_ENV
+          echo "kernels.7z has been created" >> $GITHUB_STEP_SUMMARY
           rm -rf tmp || :
-          rm -rf kernels.zip || :
-          exit 0
 
-      - name: Upload Artifact
+      - name: Upload Archive Artifact
         uses: actions/upload-artifact@v4
+        if: ${{ env.archive_created == 'true' }}
         with:
           name: kernels
           path: kernels.7z
           if-no-files-found: error
           retention-days: 90
+
+      - if: ${{ github.actor == github.repository_owner }}
+        run: |
+          if [ -z "${{ secrets.SSH_DEPLOY_KEY }}" ]; then
+            echo "SSH_DEPLOY_KEY secret is not set" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+          
+          if [ -z "${{ env.DESTINATION_REPOSITORY_NAME }}" ]; then
+            if [ -z "${{ secrets.DESTINATION_REPOSITORY_NAME }}" ]; then
+              echo "DESTINATION_REPOSITORY_NAME secret is not set"
+            else
+              export DESTINATION_REPOSITORY_NAME="${{ secrets.DESTINATION_REPOSITORY_NAME }}"
+            fi
+          fi
+          
+          if [ -z "$DESTINATION_REPOSITORY_NAME" ]; then
+            echo "DESTINATION_REPOSITORY_NAME is not set"
+            echo "DESTINATION_REPOSITORY_NAME is not set" >> $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+          
+          echo "DESTINATION_REPOSITORY_NAME=$DESTINATION_REPOSITORY_NAME" >> $GITHUB_ENV
+          
+          rm -rf tmp || :
+          mkdir -p tmp
+          echo "Extract archive" >> $GITHUB_STEP_SUMMARY
+          
+          7z x kernels.zip -otmp
+          
+          echo "DEPLOY_TO_REPOSITORY=true" >> $GITHUB_ENV
+
+      - name: Push kernelsdirectory to another repository
+        uses: cpina/github-action-push-to-another-repository@v1
+        if: ${{ env.DEPLOY_TO_REPOSITORY == 'true' && github.actor == github.repository_owner }}
+        with:
+          source-directory: tmp
+          destination-github-username: ${{ env.DESTINATION_REPOSITORY_USERNAME || github.actor }}
+          user-name: ${{ env.DESTINATION_REPOSITORY_USERNAME || github.actor }}
+          user-email: ${{ env.DESTINATION_REPOSITORY_USERNAME || github.actor }}@users.noreply.github.com
+          destination-repository-name: ${{ env.DESTINATION_REPOSITORY_NAME }}
+        env:
+          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+
+      - name: Cleanup
+        if: ${{ always() }}
+        run: |
+          rm -rf kernels.zip || :
+          rm -rf kernels.7z || :
+          rm -rf tmp || :
+          exit 0
 
