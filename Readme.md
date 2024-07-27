@@ -44,9 +44,10 @@ To enable this functionality, you'll need to configure secrets within your repos
 4. **Set Up Secrets (Required):**
 
     - Navigate to your repository's settings and then to "Secrets."
-    - Create two secrets:
+    - Create secrets:
         - `KAGGLE_USERNAME`: Your Kaggle username.
         - `KAGGLE_KEY`: Your Kaggle API key (obtainable from your profile settings).
+        - `ARCHIVE_PASSWORD`: The artifact archive password to use
 5. **Manual Trigger:**  
 You can manually trigger the workflow by navigating to the “Actions” tab in your repository, selecting the `doit.yml` workflow, and clicking the “Run workflow” button.
 6. **Output as GitHub Artifact:**
