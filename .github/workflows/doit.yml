@@ -7,7 +7,7 @@ on:
     - cron: "33 18 * * *"
 
 env:
-  PYTHON_VERSION: "3.10"
+  PYTHON_VERSION: "graalpy-24"
 
 permissions:
   contents: read
