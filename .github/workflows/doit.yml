@@ -72,24 +72,24 @@ jobs:
       - name: Run app
         if: ${{ github.actor == github.repository_owner }}
         run: |
-          echo "kaggle kernels download process" > $GITHUB_STEP_SUMMARY
+          echo "- kaggle kernels download process" >> $GITHUB_STEP_SUMMARY
           python main.py
-          echo "kaggle kernels downloaded" > $GITHUB_STEP_SUMMARY
+          echo "- kaggle kernels downloaded" > $GITHUB_STEP_SUMMARY
 
       - name: ReZip kernels
         if: ${{ github.actor == github.repository_owner }}
         run: |
           if [ -z "${{ secrets.ARCHIVE_PASSWORD }}" ]; then
             echo "ARCHIVE_PASSWORD secret is not set"
-            echo "ARCHIVE_PASSWORD secret is not set" >> $GITHUB_STEP_SUMMARY
+            echo "- ARCHIVE_PASSWORD secret is not set" >> $GITHUB_STEP_SUMMARY
             exit 0
           fi
           mkdir -p tmp
           7z x kernels.zip -otmp
-          echo "kernels.7z creation" > $GITHUB_STEP_SUMMARY
+          echo "- kernels.7z creation" > $GITHUB_STEP_SUMMARY
           7z a -t7z -mx=9 -p"${{ secrets.ARCHIVE_PASSWORD }}" kernels.7z tmp/*
           echo "archive_created=true" >> $GITHUB_ENV
-          echo "kernels.7z has been created" > $GITHUB_STEP_SUMMARY
+          echo "- kernels.7z has been created" > $GITHUB_STEP_SUMMARY
           rm -rf tmp || :
 
       - name: Upload Archive Artifact
@@ -104,7 +104,7 @@ jobs:
       - if: ${{ github.actor == github.repository_owner }}
         run: |
           if [ -z "${{ secrets.SSH_DEPLOY_KEY }}" ]; then
-            echo "SSH_DEPLOY_KEY secret is not set" >> $GITHUB_STEP_SUMMARY
+            echo "- SSH_DEPLOY_KEY secret is not set" >> $GITHUB_STEP_SUMMARY
             exit 0
           fi
           
@@ -117,29 +117,40 @@ jobs:
             fi
           fi
           
+          if [ -z "${{ env.DESTINATION_REPOSITORY_USERNAME }}" ]; then
+            if [ -z "${{ secrets.DESTINATION_REPOSITORY_USERNAME }}" ]; then
+              export DESTINATION_REPOSITORY_USERNAME="${{ github.actor }}"
+              echo "DESTINATION_REPOSITORY_USERNAME set from github.actor"
+            else
+              export DESTINATION_REPOSITORY_USERNAME="${{ secrets.DESTINATION_REPOSITORY_USERNAME }}"
+              echo "DESTINATION_REPOSITORY_USERNAME set from secrets"
+            fi
+          fi
+          
           if [ -z "$DESTINATION_REPOSITORY_NAME" ]; then
             echo "DESTINATION_REPOSITORY_NAME is not set"
-            echo "DESTINATION_REPOSITORY_NAME is not set" >> $GITHUB_STEP_SUMMARY
+            echo "- DESTINATION_REPOSITORY_NAME is not set" >> $GITHUB_STEP_SUMMARY
             exit 0
           fi
           
           echo "DESTINATION_REPOSITORY_NAME=$DESTINATION_REPOSITORY_NAME" >> $GITHUB_ENV
+          echo "DESTINATION_REPOSITORY_USERNAME=$DESTINATION_REPOSITORY_USERNAME" >> $GITHUB_ENV
           
           rm -rf tmp || :
           mkdir -p tmp
-          echo "Extract archive" > $GITHUB_STEP_SUMMARY
+          echo "- Extract archive" >> $GITHUB_STEP_SUMMARY
           
           7z x kernels.zip -otmp
           
           echo "DEPLOY_TO_REPOSITORY=true" >> $GITHUB_ENV
-          echo "DEPLOY_TO_REPOSITORY prepared" >> $GITHUB_STEP_SUMMARY
+          echo "- DEPLOY_TO_REPOSITORY prepared" >> $GITHUB_STEP_SUMMARY
 
       - name: Push kernels directory to another repository
         uses: cpina/github-action-push-to-another-repository@v1.7.2
         if: ${{ env.DEPLOY_TO_REPOSITORY == 'true' && github.actor == github.repository_owner }}
         with:
           source-directory: tmp
-          destination-github-username: ${{ env.DESTINATION_REPOSITORY_USERNAME || github.actor }}
+          destination-github-username: ${{ env.DESTINATION_REPOSITORY_USERNAME }}
           destination-repository-name: ${{ env.DESTINATION_REPOSITORY_NAME }}
           user-name: ${{ github.actor }}
           user-email: ${{ github.actor }}@users.noreply.github.com
