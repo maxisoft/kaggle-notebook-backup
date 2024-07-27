@@ -1,0 +1,52 @@
+name: do it
+
+on:
+  pull_request:
+
+env:
+  PYTHON_VERSION: "graalpy-24"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.head_ref || github.run_id }}-${{ github.actor || github.repository_owner }}
+  cancel-in-progress: false
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ env.PYTHON_VERSION }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "${{ env.PYTHON_VERSION }}"
+
+      - name: Cache pip dependencies
+        if: ${{ github.actor == github.repository_owner }}
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pip
+          key: ${{ runner.os }}-${{ env.PYTHON_VERSION }}-pip-${{ hashFiles('**/requirements.txt') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ env.PYTHON_VERSION }}-pip-
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install flake8 pytest
+
+          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+
+      - name: Lint with flake8
+        run: |
+          flake8 . --count --max-complexity=10 --max-line-length=127 --statistics
+
+      - name: Run tests
+        if: true
+        run: |
+          pytest
