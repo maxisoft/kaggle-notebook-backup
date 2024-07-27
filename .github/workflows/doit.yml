@@ -179,7 +179,10 @@ jobs:
         if: ${{ env.DEPLOY_TO_REPOSITORY == 'true' }}
         run: |
           mkdir tmpgit
-          git clone --depth 1 https://github.com/${{ env.DESTINATION_REPOSITORY_USERNAME }}/${{ env.DESTINATION_REPOSITORY_NAME }}.git tmpgit 2>&1
+          git clone --depth 1 https://github.com/${{ env.DESTINATION_REPOSITORY_USERNAME }}/${{ env.DESTINATION_REPOSITORY_NAME }}.git tmpgit 2>&1 || {
+            echo "Error cloning repository"
+            EXIT_CODE=128
+          }
           EXIT_CODE=$?
           
           if [[ $EXIT_CODE -eq 128 ]]; then
