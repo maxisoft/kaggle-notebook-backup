@@ -11,7 +11,6 @@ from sortedcontainers import SortedSet
 
 MAX_PAGE_SIZE = 100
 
-
 class DummyLen:
     def __init__(self, length):
         self.length = length
@@ -49,9 +48,9 @@ def get_kernels(api, user, page=1, include_private=True, page_size=MAX_PAGE_SIZE
                                user=user or api.get_config_value(api.CONFIG_NAME_USER),
                                sort_by="dateRun", page_size=page_size, mine=True)
     if not include_private:
-        return [k for k in kernels if not getattr(k, 'isPrivate', getattr(k, 'isPrivateNullable'))]
+        yield from (k for k in kernels if not getattr(k, 'isPrivate', getattr(k, 'isPrivateNullable')))
     else:
-        return kernels
+        yield from kernels
 
 
 def kernel_identity(kernel):
