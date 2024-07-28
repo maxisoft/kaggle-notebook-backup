@@ -111,7 +111,7 @@ jobs:
           echo "- kernels.7z has been created" > $GITHUB_STEP_SUMMARY
           
           recipient="${{ github.actor }}@users.noreply.github.com"
-          echo "- creating gpg keys for `$recipient`" > $GITHUB_STEP_SUMMARY
+          echo "- creating gpg keys for ${recipient}" > $GITHUB_STEP_SUMMARY
           mkdir -p ${{ env.GNUPGHOME }}
           mkdir -p gpg
           pushd gpg
