@@ -190,13 +190,16 @@ jobs:
           mkdir tmpgit
           EXIT_CODE=0
           git clone -q --sparse --depth 1 'https://github.com/${{ env.DESTINATION_REPOSITORY_USERNAME }}/${{ env.DESTINATION_REPOSITORY_NAME }}.git' &> tmp_git.out 2>&1 || {
-            if (grep --ignore-case -q "could not read Username" tmp_git.out); then
-              echo "Repository is private (1)"
-              EXIT_CODE=$?
-            else
-              if (grep --ignore-case -q "Authentication failed" tmp_git.out); then
-                echo "Repository is private (2)"
-                EXIT_CODE=$?
+            tmp_exit_code=$?
+            if [[ $tmp_exit_code -ne 0 ]]; then
+              if (grep --ignore-case -q "could not read Username" tmp_git.out); then
+                echo "Repository is private (1)"
+                EXIT_CODE=tmp_exit_code
+              else
+                if (grep --ignore-case -q "Authentication failed" tmp_git.out); then
+                  echo "Repository is private (2)"
+                  EXIT_CODE=tmp_exit_code
+                fi
               fi
             fi
           }
