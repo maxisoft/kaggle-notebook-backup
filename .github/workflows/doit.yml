@@ -78,8 +78,16 @@ jobs:
           echo "- kaggle kernels downloaded" > $GITHUB_STEP_SUMMARY
 
       - name: ReZip kernels
-        if: ${{ github.actor == github.repository_owner && (!startsWith('y', (vars.DISABLE_KAGGLE_ARCHIVING || 'no'))) }}
+        if: ${{ github.actor == github.repository_owner }}
         run: |
+          DISABLE_KAGGLE_ARCHIVING="${{ env.DISABLE_KAGGLE_ARCHIVING || vars.DISABLE_KAGGLE_ARCHIVING || secrets.DISABLE_KAGGLE_ARCHIVING }}"
+          if [[ "${DISABLE_KAGGLE_ARCHIVING:-}" =~ ^(true|1|y|yes|ok)$ ]]; then
+            echo "Kaggle archiving is disabled"
+            echo "archive_created=false" >> $GITHUB_ENV
+            echo "- kernels.7z has not been created as requested" > $GITHUB_STEP_SUMMARY
+            exit 0
+          fi
+          
           if [ -z "${{ secrets.ARCHIVE_PASSWORD }}" ]; then
             echo "ARCHIVE_PASSWORD secret is not set"
             echo "- ARCHIVE_PASSWORD secret is not set" >> $GITHUB_STEP_SUMMARY
@@ -186,7 +194,6 @@ jobs:
             echo "Error cloning repository"
           }
           
-          
           if [[ $EXIT_CODE -eq 128 ]]; then
             echo "Repository is private"
             echo "SAFE_TO_PUSH=true" >> $GITHUB_ENV
@@ -221,8 +228,10 @@ jobs:
       - name: Cleanup
         if: ${{ always() }}
         run: |
+          rm -rf ~/.kaggle || :
           rm -rf kernels.zip || :
           rm -rf kernels.7z || :
           rm -rf tmp || :
+          rm -rf tmpgit || :
           exit 0
 
