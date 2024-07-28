@@ -189,11 +189,18 @@ jobs:
         run: |
           mkdir tmpgit
           EXIT_CODE=0
-          git clone -q --sparse --depth 1 https://github.com/${{ env.DESTINATION_REPOSITORY_USERNAME }}/${{ env.DESTINATION_REPOSITORY_NAME }}.git tmpgit 2>&1 || {
-            if (grep --ignore-case -q "could not read Username"); then
+          git clone -q --sparse --depth 1 'https://github.com/${{ env.DESTINATION_REPOSITORY_USERNAME }}/${{ env.DESTINATION_REPOSITORY_NAME }}.git' &> tmp_git.out 2>&1 || {
+            if (grep --ignore-case -q "could not read Username" tmp_git.out); then
+              echo "Repository is private (1)"
               EXIT_CODE=$?
+            else
+              if (grep --ignore-case -q "Authentication failed" tmp_git.out); then
+                echo "Repository is private (2)"
+                EXIT_CODE=$?
+              fi
             fi
           }
+          rm -rf tmp_git.out
           
           if [[ $EXIT_CODE -eq 128 ]]; then
             echo "Repository is private"
@@ -211,6 +218,7 @@ jobs:
           GIT_CONFIG_SYSTEM: ''
           GIT_CONFIG_GLOBAL: ''
           GIT_CONFIG_LOCAL: ''
+          GIT_TERMINAL_PROMPT: 0
 
       - name: Push kernels directory to another repository
         uses: cpina/github-action-push-to-another-repository@v1.7.2
