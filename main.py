@@ -9,6 +9,7 @@ from typing import Optional
 
 import pathvalidate
 from kaggle.api.kaggle_api_extended import KaggleApi
+from kaggle.models.kaggle_models_extended import Kernel
 from sortedcontainers import SortedSet
 
 MAX_PAGE_SIZE = 100
@@ -89,7 +90,7 @@ def fix_kernel_folder(path: Path, remove_private: bool = True) -> Optional[Path]
         logging.warning(f"Kernel metadata not found: {path}")
         return path if not remove_private else None
 
-    with meta_path.open("r") as f:
+    with meta_path.open("rb") as f:
         metadata = json.load(f)
 
     if remove_private and metadata.get("is_private", metadata.get("isPrivate", True)):
@@ -106,6 +107,32 @@ def fix_kernel_folder(path: Path, remove_private: bool = True) -> Optional[Path]
         return new_path
 
     return path
+
+
+def _add_github_mask(value):
+    if value in (None, True, False):
+        return False
+
+    if value in range(0, 100):
+        return False
+
+    if isinstance(value, Kernel):
+        _add_github_mask(str(value))
+        _add_github_mask(getattr(value, 'ref'))
+        _add_github_mask(getattr(value, 'title'))
+        return value
+
+    if isinstance(value, Path):
+        _add_github_mask(str(value))
+        _add_github_mask(value.name)
+        _add_github_mask(value.stem)
+        return value
+
+    value = str(value)
+    if not value.strip():
+        return False
+    print(f'::add-mask::{value}')
+    return value
 
 
 def main(include_private=False, max_page_size=MAX_PAGE_SIZE, user=None, output_name="kernels.zip",
@@ -127,6 +154,7 @@ def main(include_private=False, max_page_size=MAX_PAGE_SIZE, user=None, output_n
     args = parser.parse_args()
     include_private = bool(args.include_private)
     add_mask = bool(args.add_mask)
+    add_github_mask = _add_github_mask if add_mask else lambda value: None
 
     api = KaggleApi()
     api.authenticate()
@@ -145,18 +173,13 @@ def main(include_private=False, max_page_size=MAX_PAGE_SIZE, user=None, output_n
             if not diff:
                 break
             for kernel in diff:
-                if add_mask:
-                    print(f'::add-mask::{kernel.ref}')
-                    print(f'::add-mask::{kernel.title}')
                 path = Path(tmpdir, kernel_to_path(kernel))
-                if add_mask:
-                    print(f"::add-mask::{path.name}")
+                add_github_mask(path)
                 try:
                     path.mkdir(parents=True, exist_ok=True)
                     api.kernels_pull(kernel.ref, path=path, metadata=True)
                     path = fix_kernel_folder(path, remove_private=not include_private)
-                    if add_mask:
-                        print(f"::add-mask::{path.name}")
+                    add_github_mask(path)
                 except KeyboardInterrupt:
                     raise
                 except Exception as e:
@@ -170,20 +193,19 @@ def main(include_private=False, max_page_size=MAX_PAGE_SIZE, user=None, output_n
         for kernel in retry_later:
             try:
                 path = Path(tmpdir, kernel_to_path(kernel))
-                if add_mask:
-                    print(f"::add-mask::{path.name}")
+                add_github_mask(path)
                 path.mkdir(parents=True, exist_ok=True)
                 api.kernels_pull(kernel.ref, path=path, metadata=True)
                 fix_kernel_folder(path, remove_private=not include_private)
             except Exception:  # pylint: disable=broad-except
-                logging.warning("Failed to download %r", getattr(kernel, 'ref', getattr(kernel,
-                                                                                        'title') if not add_mask else 'hidden kernel name'),
+                logging.warning("Failed to download %r",
+                                kernel.ref if not add_mask else 'hidden kernel name',
                                 exc_info=True)
 
         shutil.make_archive(str(Path(args.output).parent / Path(args.output).stem), 'zip', tmpdir)
 
 
 if __name__ == '__main__':
-    include_private = os.getenv('KAGGLE_KERNELS_PRIVATE', '').lower() in ('true', '1', 'y', 'yes', 'ok')
-    add_mask = os.getenv('KAGGLE_KERNELS_MASK', '').lower() in ('true', '1', 'y', 'yes', 'ok')
-    main(include_private=include_private, add_mask=add_mask)
+    env_include_private = os.getenv('KAGGLE_KERNELS_PRIVATE', '').lower() in ('true', '1', 'y', 'yes', 'ok')
+    env_add_mask = os.getenv('KAGGLE_KERNELS_MASK', '').lower() in ('true', '1', 'y', 'yes', 'ok')
+    main(include_private=env_include_private, add_mask=env_add_mask)
