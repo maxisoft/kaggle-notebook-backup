@@ -109,7 +109,7 @@ def fix_kernel_folder(path: Path, remove_private: bool = True) -> Optional[Path]
 
 
 def main(include_private=False, max_page_size=MAX_PAGE_SIZE, user=None, output_name="kernels.zip",
-         tmp_dir_prefix="kaggle_", tmp_dir=None):
+         tmp_dir_prefix="kaggle_", tmp_dir=None, add_mask=False):
     parser = argparse.ArgumentParser(description="Download All Kaggle Kernels")
     parser.add_argument("-o", "--output", type=validate_filename, default=output_name,
                         help=f"Name of the output zip file (default: {output_name})")
@@ -121,9 +121,12 @@ def main(include_private=False, max_page_size=MAX_PAGE_SIZE, user=None, output_n
                         help=f"Maximum number of kernels to download per page (default: {max_page_size})")
     parser.add_argument("-t", "--tmp-dir", type=str, default=tmp_dir,
                         help=f"Path to the temporary directory (default: {tmp_dir})")
+    parser.add_argument("--add-mask", action="store_true", default=add_mask,
+                        help=argparse.SUPPRESS)
 
     args = parser.parse_args()
     include_private = bool(args.include_private)
+    add_mask = bool(args.add_mask)
 
     api = KaggleApi()
     api.authenticate()
@@ -142,11 +145,18 @@ def main(include_private=False, max_page_size=MAX_PAGE_SIZE, user=None, output_n
             if not diff:
                 break
             for kernel in diff:
+                if add_mask:
+                    print(f'::add-mask::{kernel.ref}')
+                    print(f'::add-mask::{kernel.title}')
                 path = Path(tmpdir, kernel_to_path(kernel))
+                if add_mask:
+                    print(f"::add-mask::{path.name}")
                 try:
                     path.mkdir(parents=True, exist_ok=True)
                     api.kernels_pull(kernel.ref, path=path, metadata=True)
-                    fix_kernel_folder(path, remove_private=not include_private)
+                    path = fix_kernel_folder(path, remove_private=not include_private)
+                    if add_mask:
+                        print(f"::add-mask::{path.name}")
                 except KeyboardInterrupt:
                     raise
                 except Exception as e:
@@ -160,15 +170,20 @@ def main(include_private=False, max_page_size=MAX_PAGE_SIZE, user=None, output_n
         for kernel in retry_later:
             try:
                 path = Path(tmpdir, kernel_to_path(kernel))
+                if add_mask:
+                    print(f"::add-mask::{path.name}")
                 path.mkdir(parents=True, exist_ok=True)
                 api.kernels_pull(kernel.ref, path=path, metadata=True)
                 fix_kernel_folder(path, remove_private=not include_private)
             except Exception:  # pylint: disable=broad-except
-                logging.warning("Failed to download %r", getattr(kernel, 'ref', getattr(kernel, 'title')),
+                logging.warning("Failed to download %r", getattr(kernel, 'ref', getattr(kernel,
+                                                                                        'title') if not add_mask else 'hidden kernel name'),
                                 exc_info=True)
 
         shutil.make_archive(str(Path(args.output).parent / Path(args.output).stem), 'zip', tmpdir)
 
 
 if __name__ == '__main__':
-    main(include_private=os.getenv('KAGGLE_KERNELS_PRIVATE', '').lower() in ('true', '1', 'y', 'yes', 'ok'))
+    include_private = os.getenv('KAGGLE_KERNELS_PRIVATE', '').lower() in ('true', '1', 'y', 'yes', 'ok')
+    add_mask = os.getenv('KAGGLE_KERNELS_MASK', '').lower() in ('true', '1', 'y', 'yes', 'ok')
+    main(include_private=include_private, add_mask=add_mask)

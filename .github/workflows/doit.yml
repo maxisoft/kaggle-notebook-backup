@@ -9,6 +9,7 @@ on:
 
 env:
   KAGGLE_KERNELS_PRIVATE: ${{ vars.KAGGLE_KERNELS_PRIVATE || 'no' }} # by default, do not include private kaggle kernels
+  KAGGLE_KERNELS_MASK: ${{ vars.KAGGLE_KERNELS_MASK || 'yes' }}
   PYTHON_VERSION: ${{ vars.PYTHON_VERSION || '3.11' }}
 
 permissions:
