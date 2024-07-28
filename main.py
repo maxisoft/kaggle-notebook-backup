@@ -1,15 +1,18 @@
 import argparse
+import json
 import logging
 import os
 import shutil
 from pathlib import Path
 from tempfile import TemporaryDirectory
+from typing import Optional
 
 import pathvalidate
 from kaggle.api.kaggle_api_extended import KaggleApi
 from sortedcontainers import SortedSet
 
 MAX_PAGE_SIZE = 100
+
 
 class DummyLen:
     def __init__(self, length):
@@ -61,6 +64,50 @@ def kernel_to_path(kernel):
     return Path(pathvalidate.sanitize_filename(f"{kernel.ref}#{kernel.id}", replacement_text="_"))
 
 
+def fix_kernel_folder(path: Path, remove_private: bool = True) -> Optional[Path]:
+    """
+    Fixes the name and location of a kernel folder.
+
+    This function takes a path to a kernel folder and performs the following actions:
+
+    1. Checks for the existence of the "kernel-metadata.json" file.
+    2. If the file exists, loads the metadata and checks if the kernel is private.
+      - If `remove_private` is True and the kernel is private, it removes the entire folder.
+      - Otherwise, it sanitizes the kernel name based on its ID and renames the folder if necessary.
+    3. Returns the path to the fixed kernel folder or None if the folder was removed.
+
+    Args:
+        path (Path): The path to the kernel folder.
+        remove_private (bool, optional): Whether to remove private kernels. Defaults to True.
+
+    Returns:
+        Optional[Path]: The path to the fixed kernel folder or None if the folder was removed.
+    """
+
+    meta_path = Path(path, "kernel-metadata.json")
+    if not meta_path.exists():
+        logging.warning(f"Kernel metadata not found: {path}")
+        return path if not remove_private else None
+
+    with meta_path.open("r") as f:
+        metadata = json.load(f)
+
+    if remove_private and metadata.get("is_private", metadata.get("isPrivate", True)):
+        logging.debug(f"Removing private kernel: {path}")
+        shutil.rmtree(path)
+        return None
+
+    new_path = Path(path.parent, pathvalidate.sanitize_filename(
+        f"{metadata['id']}#{metadata['id_no']}", replacement_text="_"))
+
+    if new_path != path and not new_path.exists():
+        logging.debug(f"Renaming kernel: {path} -> {new_path}")
+        shutil.move(path, new_path)
+        return new_path
+
+    return path
+
+
 def main(include_private=False, max_page_size=MAX_PAGE_SIZE, user=None, output_name="kernels.zip",
          tmp_dir_prefix="kaggle_", tmp_dir=None):
     parser = argparse.ArgumentParser(description="Download All Kaggle Kernels")
@@ -76,21 +123,22 @@ def main(include_private=False, max_page_size=MAX_PAGE_SIZE, user=None, output_n
                         help=f"Path to the temporary directory (default: {tmp_dir})")
 
     args = parser.parse_args()
+    include_private = bool(args.include_private)
 
     api = KaggleApi()
     api.authenticate()
 
     with TemporaryDirectory(prefix=tmp_dir_prefix, dir=args.tmp_dir) as tmpdir:
         kernels = DummyLen(args.max_page_size)
-        all_kernels = SortedSet(key=kernel_identity)
+        processed_kernels = SortedSet(key=kernel_identity)
         page = 1
 
         retry_later = SortedSet(key=kernel_identity)
 
         while len(kernels) >= args.max_page_size:
-            kernels = SortedSet(get_kernels(api, args.user, page, bool(args.include_private), args.max_page_size),
+            kernels = SortedSet(get_kernels(api, args.user, page, include_private, args.max_page_size),
                                 key=kernel_identity)
-            diff = kernels - all_kernels
+            diff = kernels - processed_kernels
             if not diff:
                 break
             for kernel in diff:
@@ -98,12 +146,14 @@ def main(include_private=False, max_page_size=MAX_PAGE_SIZE, user=None, output_n
                 try:
                     path.mkdir(parents=True, exist_ok=True)
                     api.kernels_pull(kernel.ref, path=path, metadata=True)
+                    fix_kernel_folder(path, remove_private=not include_private)
                 except KeyboardInterrupt:
                     raise
                 except Exception as e:
                     logging.warning(e, exc_info=True)
-                else:
-                    all_kernels.add(kernel)
+                    retry_later.add(kernel)
+                finally:
+                    processed_kernels.add(kernel)
 
             page += 1
 
@@ -112,7 +162,8 @@ def main(include_private=False, max_page_size=MAX_PAGE_SIZE, user=None, output_n
                 path = Path(tmpdir, kernel_to_path(kernel))
                 path.mkdir(parents=True, exist_ok=True)
                 api.kernels_pull(kernel.ref, path=path, metadata=True)
-            except Exception:
+                fix_kernel_folder(path, remove_private=not include_private)
+            except Exception:  # pylint: disable=broad-except
                 logging.warning("Failed to download %r", getattr(kernel, 'ref', getattr(kernel, 'title')),
                                 exc_info=True)
 
