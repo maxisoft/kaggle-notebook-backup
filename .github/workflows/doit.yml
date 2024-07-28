@@ -9,7 +9,7 @@ on:
 
 env:
   KAGGLE_KERNELS_PRIVATE: ${{ vars.KAGGLE_KERNELS_PRIVATE || 'no' }} # by default, do not include private kaggle kernels
-  KAGGLE_KERNELS_MASK: ${{ vars.KAGGLE_KERNELS_MASK || 'yes' }}
+  KAGGLE_KERNELS_MASK: ${{ vars.KAGGLE_KERNELS_MASK || 'yes' }} # by default, mask all kaggle kernels names in the log output
   PYTHON_VERSION: ${{ vars.PYTHON_VERSION || '3.11' }}
 
 permissions:
@@ -226,7 +226,7 @@ jobs:
 
       - name: Push kernels directory to another repository
         uses: cpina/github-action-push-to-another-repository@v1.7.2
-        if: ${{ env.DEPLOY_TO_REPOSITORY == 'true' && env.SAFE_TO_PUSH == 'true' && github.actor == github.repository_owner }}
+        if: ${{ env.DEPLOY_TO_REPOSITORY == 'true' && env.SAFE_TO_PUSH == 'true' }}
         with:
           source-directory: tmp
           destination-github-username: ${{ env.DESTINATION_REPOSITORY_USERNAME }}
@@ -236,7 +236,7 @@ jobs:
           create-target-branch-if-needed: ${{ vars.DEPLOY_TO_REPOSITORY_CREATE_TARGET_BRANCH_IF_NEEDED || true }}
           target-branch: ${{ env.DEPLOY_TO_REPOSITORY_TARGET_BRANCH || vars.DEPLOY_TO_REPOSITORY_TARGET_BRANCH || 'main' }}
         env:
-          SSH_DEPLOY_KEY: ${{ secrets.SSH_DEPLOY_KEY }}
+          SSH_DEPLOY_KEY: ${{ secrets.DEPLOY_TO_REPOSITORY_SSH_DEPLOY_KEY || secrets.SSH_DEPLOY_KEY }}
 
       - name: Cleanup
         if: ${{ always() }}
