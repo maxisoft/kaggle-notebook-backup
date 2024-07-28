@@ -80,6 +80,8 @@ jobs:
 
       - name: ReZip kernels
         if: ${{ github.actor == github.repository_owner }}
+        env:
+          GNUPGHOME: /tmp/gpgtmp.7
         run: |
           DISABLE_KAGGLE_ARCHIVING="${{ env.DISABLE_KAGGLE_ARCHIVING || vars.DISABLE_KAGGLE_ARCHIVING || secrets.DISABLE_KAGGLE_ARCHIVING }}"
           if [[ "${DISABLE_KAGGLE_ARCHIVING:-}" =~ ^(true|1|y|yes|ok)$ ]]; then
@@ -96,28 +98,53 @@ jobs:
           fi
           mkdir -p tmp
           7z x kernels.zip -otmp
-          echo "- kernels.7z creation" > $GITHUB_STEP_SUMMARY
+          
+          
+          echo "- kernels.7z random password generation" > $GITHUB_STEP_SUMMARY
+          strings /dev/urandom | grep -o '[[:alnum:]]' | head -n 32 | tr -d '\n' > archive_pass.txt
+          echo ::add-mask::$(cat archive_pass.txt)
+          
           pushd tmp
-          7z a -t7z -m0=lzma2 -mx=6 -mhe=on -ms=on -p"${{ secrets.ARCHIVE_PASSWORD }}" ../kernels.7z *
+          7z a -t7z -m0=lzma2 -mx=9 -mhe=on -ms=on -p"$(cat ../archive_pass.txt)" ../kernels.7z *
           popd
           echo "archive_created=true" >> $GITHUB_ENV
           echo "- kernels.7z has been created" > $GITHUB_STEP_SUMMARY
+          
+          recipient="${{ github.actor }}@users.noreply.github.com"
+          echo "- creating gpg keys for `$recipient`" > $GITHUB_STEP_SUMMARY
+          mkdir -p ${{ env.GNUPGHOME }}
+          mkdir -p gpg
+          pushd gpg
+          
+          gpg --batch --passphrase="${{ secrets.ARCHIVE_PASSWORD }}" --default-new-key-algo "ed25519/cert,sign+cv25519/encr" --quick-generate-key "$recipient"
+          gpg --batch --pinentry-mode=loopback --yes --output private.key --passphrase="${{ secrets.ARCHIVE_PASSWORD }}" --export-secret-keys
+          gpg --export --yes --output public.key
+          gpg --out archive_pass.txt.gpg --encrypt --recipient "$recipient" ../archive_pass.txt
+          gpg --out ../kernels.7z.gpg --encrypt --recipient "$recipient" ../kernels.7z
+          popd
+          
+          rm -rf archive_pass.txt
+          
+          zip kernels_gpg gpg/* kernels.7z.gpg
+          
           rm -rf tmp || :
+          rm -rf gpg || :
+          rm -rf ${{ env.GNUPGHOME }} || :
 
       - name: Upload Archive Artifact
         uses: actions/upload-artifact@v4
         if: ${{ env.archive_created == 'true' }}
         with:
           name: kernels
-          path: kernels.7z
+          path: kernels_gpg.zip
           if-no-files-found: error
           retention-days: ${{ vars.ARTIFACT_RETENTION_DAYS || 90 }}
 
       - name: Prepare remote git push
         if: ${{ github.actor == github.repository_owner }}
         run: |
-          if [ -z "${{ secrets.SSH_DEPLOY_KEY }}" ]; then
-            echo "- SSH_DEPLOY_KEY secret is not set" >> $GITHUB_STEP_SUMMARY
+          if [ -z "${{ secrets.DEPLOY_TO_REPOSITORY_SSH_DEPLOY_KEY || secrets.SSH_DEPLOY_KEY }}" ]; then
+            echo "- DEPLOY_TO_REPOSITORY_SSH_DEPLOY_KEY secret is not set" >> $GITHUB_STEP_SUMMARY
             exit 0
           fi
           
@@ -246,5 +273,7 @@ jobs:
           rm -rf kernels.7z || :
           rm -rf tmp || :
           rm -rf tmpgit || :
+          rm -rf gpg || :
+          rm -rf /tmp/gpg.7 || :
           exit 0
 
